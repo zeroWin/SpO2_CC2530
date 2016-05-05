@@ -22,7 +22,7 @@
   its documentation for any purpose.
 
   YOU FURTHER ACKNOWLEDGE AND AGREE THAT THE SOFTWARE AND DOCUMENTATION ARE
-  PROVIDED “AS IS” WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+  PROVIDED “AS IS?WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED,
   INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY, TITLE,
   NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL
   TEXAS INSTRUMENTS OR ITS LICENSORS BE LIABLE OR OBLIGATED UNDER CONTRACT,
@@ -408,7 +408,7 @@ st( \
 
 /* Set to TRUE enable ADC usage, FALSE disable it */
 #ifndef HAL_ADC
-#define HAL_ADC TRUE
+#define HAL_ADC FALSE
 #endif
 
 /* Set to TRUE enable DMA usage, FALSE disable it */
@@ -432,12 +432,12 @@ st( \
 
 /* Set to TRUE enable LCD usage, FALSE disable it */
 #ifndef HAL_LCD
-#define HAL_LCD TRUE
+#define HAL_LCD FALSE
 #endif
 
 /* Set to TRUE enable LED usage, FALSE disable it */
 #ifndef HAL_LED
-#define HAL_LED TRUE
+#define HAL_LED FALSE
 #endif
 #if (!defined BLINK_LEDS) && (HAL_LED == TRUE)
 #define BLINK_LEDS
@@ -445,7 +445,7 @@ st( \
 
 /* Set to TRUE enable KEY usage, FALSE disable it */
 #ifndef HAL_KEY
-#define HAL_KEY TRUE
+#define HAL_KEY FALSE
 #endif
 
 /* Set to TRUE enable UART usage, FALSE disable it */

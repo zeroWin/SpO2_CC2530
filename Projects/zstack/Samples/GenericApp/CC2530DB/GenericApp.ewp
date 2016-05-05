@@ -2392,11 +2392,12 @@
           <name>CCDefines</name>
           <state>NWK_AUTO_POLL</state>
           <state>ZTOOL_P1</state>
-          <state>MT_TASK</state>
-          <state>MT_SYS_FUNC</state>
-          <state>MT_ZDO_FUNC</state>
+          <state>xMT_TASK</state>
+          <state>xMT_SYS_FUNC</state>
+          <state>xMT_ZDO_FUNC</state>
           <state>LCD_SUPPORTED=DEBUG</state>
           <state>xPOWER_SAVING</state>
+          <state>HAL_UART=FALSE</state>
         </option>
         <option>
           <name>CCPreprocFile</name>
