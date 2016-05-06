@@ -80,22 +80,32 @@
  */
 
 // This list should be filled with Application specific Cluster IDs.
-const cId_t GenericApp_ClusterList[GENERICAPP_MAX_CLUSTERS] =
+const cId_t GenericApp_InClusterList[GENERICAPP_IN_CLUSTERS] =
 {
-  GENERICAPP_CLUSTERID
+  GENERICAPP_CLUSTERID,
+  GENERICAPP_CLUSTERID_START,
+  GENERICAPP_CLUSTERID_SYNC,
+  GENERICAPP_CLUSTERID_STOP
+};
+
+const cId_t GenericApp_OutClusterList[GENERICAPP_OUT_CLUSTERS] =
+{
+  GENERICAPP_CLUSTERID,
+  GENERICAPP_CLUSTERID_SPO2_SYNC_OVER,
+  GENERICAPP_CLUSTERID_SPO2_RESULT
 };
 
 const SimpleDescriptionFormat_t GenericApp_SimpleDesc =
 {
-  GENERICAPP_ENDPOINT,              //  int Endpoint;
-  GENERICAPP_PROFID,                //  uint16 AppProfId[2];
-  GENERICAPP_DEVICEID,              //  uint16 AppDeviceId[2];
-  GENERICAPP_DEVICE_VERSION,        //  int   AppDevVer:4;
-  GENERICAPP_FLAGS,                 //  int   AppFlags:4;
-  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
-  (cId_t *)GenericApp_ClusterList,  //  byte *pAppInClusterList;
-  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
-  (cId_t *)GenericApp_ClusterList   //  byte *pAppInClusterList;
+  GENERICAPP_ENDPOINT,                  //  int Endpoint;
+  GENERICAPP_PROFID,                    //  uint16 AppProfId[2];
+  GENERICAPP_DEVICEID,                  //  uint16 AppDeviceId[2];
+  GENERICAPP_DEVICE_VERSION,            //  int   AppDevVer:4;
+  GENERICAPP_FLAGS,                     //  int   AppFlags:4;
+  GENERICAPP_IN_CLUSTERS,               //  byte  AppNumInClusters;
+  (cId_t *)GenericApp_InClusterList,    //  byte *pAppInClusterList;
+  GENERICAPP_OUT_CLUSTERS,              //  byte  AppNumOutClusters;
+  (cId_t *)GenericApp_OutClusterList    //  byte *pAppOutClusterList;
 };
 
 // This is the Endpoint/Interface description.  It is defined here, but
@@ -165,8 +175,8 @@ void GenericApp_Init( byte task_id )
   // If the hardware is application specific - add it here.
   // If the hardware is other parts of the device add it in main().
 
-  GenericApp_DstAddr.addrMode = (afAddrMode_t)AddrNotPresent;
-  GenericApp_DstAddr.endPoint = 0;
+  GenericApp_DstAddr.addrMode = (afAddrMode_t)Addr16Bit;
+  GenericApp_DstAddr.endPoint = GENERICAPP_ENDPOINT;
   GenericApp_DstAddr.addr.shortAddr = 0;
 
   // Fill out the endpoint description.
@@ -259,9 +269,6 @@ UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
               || (GenericApp_NwkState == DEV_END_DEVICE) )
           {
             // Start sending "the" message in a regular interval.
-            osal_start_timerEx( GenericApp_TaskID,
-                                GENERICAPP_SEND_MSG_EVT,
-                                GENERICAPP_SEND_MSG_TIMEOUT );
           }
           break;
 
@@ -370,70 +377,6 @@ void GenericApp_ProcessZDOMsgs( zdoIncomingMsg_t *inMsg )
  */
 void GenericApp_HandleKeys( byte shift, byte keys )
 {
-  zAddrType_t dstAddr;
-
-  // Shift is used to make each button/switch dual purpose.
-  if ( shift )
-  {
-    if ( keys & HAL_KEY_SW_1 )
-    {
-    }
-    if ( keys & HAL_KEY_SW_2 )
-    {
-    }
-    if ( keys & HAL_KEY_SW_3 )
-    {
-    }
-    if ( keys & HAL_KEY_SW_4 )
-    {
-    }
-  }
-  else
-  {
-    if ( keys & HAL_KEY_SW_1 )
-    {
-      // Since SW1 isn't used for anything else in this application...
-#if defined( SWITCH1_BIND )
-      // we can use SW1 to simulate SW2 for devices that only have one switch,
-      keys |= HAL_KEY_SW_2;
-#elif defined( SWITCH1_MATCH )
-      // or use SW1 to simulate SW4 for devices that only have one switch
-      keys |= HAL_KEY_SW_4;
-#endif
-    }
-
-    if ( keys & HAL_KEY_SW_2 )
-    {
-      HalLedSet ( HAL_LED_4, HAL_LED_MODE_OFF );
-
-      // Initiate an End Device Bind Request for the mandatory endpoint
-      dstAddr.addrMode = Addr16Bit;
-      dstAddr.addr.shortAddr = 0x0000; // Coordinator
-      ZDP_EndDeviceBindReq( &dstAddr, NLME_GetShortAddr(),
-                            GenericApp_epDesc.endPoint,
-                            GENERICAPP_PROFID,
-                            GENERICAPP_MAX_CLUSTERS, (cId_t *)GenericApp_ClusterList,
-                            GENERICAPP_MAX_CLUSTERS, (cId_t *)GenericApp_ClusterList,
-                            FALSE );
-    }
-
-    if ( keys & HAL_KEY_SW_3 )
-    {
-    }
-
-    if ( keys & HAL_KEY_SW_4 )
-    {
-      HalLedSet ( HAL_LED_4, HAL_LED_MODE_OFF );
-      // Initiate a Match Description Request (Service Discovery)
-      dstAddr.addrMode = AddrBroadcast;
-      dstAddr.addr.shortAddr = NWK_BROADCAST_SHORTADDR;
-      ZDP_MatchDescReq( &dstAddr, NWK_BROADCAST_SHORTADDR,
-                        GENERICAPP_PROFID,
-                        GENERICAPP_MAX_CLUSTERS, (cId_t *)GenericApp_ClusterList,
-                        GENERICAPP_MAX_CLUSTERS, (cId_t *)GenericApp_ClusterList,
-                        FALSE );
-    }
-  }
 }
 
 /*********************************************************************
@@ -462,6 +405,24 @@ void GenericApp_MessageMSGCB( afIncomingMSGPacket_t *pkt )
 #elif defined( WIN32 )
       WPRINTSTR( pkt->cmd.Data );
 #endif
+      break;
+      
+    case GENERICAPP_CLUSTERID_START:
+      AF_DataRequest( &GenericApp_DstAddr, &GenericApp_epDesc,
+                      GENERICAPP_CLUSTERID_SPO2_RESULT,
+                      0,
+                      NULL,
+                      &GenericApp_TransID,
+                      AF_DISCV_ROUTE, AF_DEFAULT_RADIUS );        
+      break;
+      
+    case GENERICAPP_CLUSTERID_SYNC:
+      AF_DataRequest( &GenericApp_DstAddr, &GenericApp_epDesc,
+                      GENERICAPP_CLUSTERID_SPO2_SYNC_OVER,
+                      0,
+                      NULL,
+                      &GenericApp_TransID,
+                      AF_DISCV_ROUTE, AF_DEFAULT_RADIUS );        
       break;
   }
 }
