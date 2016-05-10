@@ -214,6 +214,8 @@ void GenericApp_Init( byte task_id )
  *
  * @return  none
  */
+uint8 flag = 0;
+uint8 temp = 0;
 UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
 {
   afIncomingMSGPacket_t *MSGpkt;
@@ -302,7 +304,27 @@ UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
     // return unprocessed events
     return (events ^ GENERICAPP_SEND_MSG_EVT);
   }
-
+  
+  
+  if ( events & GENERICAPP_START_MEASURE )
+  {
+    if(flag == 1)
+    {
+      uint16 dataTemp[30] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30};
+      AF_DataRequest( &GenericApp_DstAddr, &GenericApp_epDesc,
+                      GENERICAPP_CLUSTERID_SPO2_RESULT,
+                      60,
+                      (uint8 *)dataTemp,
+                      &GenericApp_TransID,
+                      AF_DISCV_ROUTE, AF_DEFAULT_RADIUS ); 
+      // Setup to send message again
+      osal_start_timerEx( GenericApp_TaskID,
+                          GENERICAPP_START_MEASURE,
+                          240 );
+    }
+    // return unprocessed events
+    return (events ^ GENERICAPP_START_MEASURE);
+  }
   // Discard unknown events
   return 0;
 }
@@ -408,21 +430,17 @@ void GenericApp_MessageMSGCB( afIncomingMSGPacket_t *pkt )
       break;
       
     case GENERICAPP_CLUSTERID_START:
-      AF_DataRequest( &GenericApp_DstAddr, &GenericApp_epDesc,
-                      GENERICAPP_CLUSTERID_SPO2_RESULT,
-                      0,
-                      NULL,
-                      &GenericApp_TransID,
-                      AF_DISCV_ROUTE, AF_DEFAULT_RADIUS );        
+      flag = 1;
+      osal_set_event( GenericApp_TaskID , GENERICAPP_START_MEASURE );      
+      break;
+    
+    case GENERICAPP_CLUSTERID_STOP:  
+      flag = 0;
       break;
       
     case GENERICAPP_CLUSTERID_SYNC:
-      AF_DataRequest( &GenericApp_DstAddr, &GenericApp_epDesc,
-                      GENERICAPP_CLUSTERID_SPO2_SYNC_OVER,
-                      0,
-                      NULL,
-                      &GenericApp_TransID,
-                      AF_DISCV_ROUTE, AF_DEFAULT_RADIUS );        
+      flag = 1;
+      osal_set_event( GenericApp_TaskID , GENERICAPP_START_MEASURE );        
       break;
   }
 }
