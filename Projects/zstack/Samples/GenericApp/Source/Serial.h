@@ -68,6 +68,13 @@ typedef struct
   osal_event_hdr_t  hdr;
   uint8             *msg;
 } OSALSerialData_t;
+
+#define START_MEASURE   0x01
+#define STOP_MEASURE    0x02
+#define SYNC_MEASURE    0x03
+#define DATA_START      0x33    // 数据开始校验位
+#define DATA_END        0x55    // 数据结束校验位
+
 /**************************************************************************************************
  *                                             FUNCTIONS - API
  **************************************************************************************************/

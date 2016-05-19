@@ -135,7 +135,7 @@ devStates_t GenericApp_NwkState;
 byte GenericApp_TransID;  // This is the unique message ID (counter)
 
 afAddrType_t GenericApp_DstAddr;
-
+SpO2SystemStatus_t SpO2SystemStatus;
 /*********************************************************************
  * LOCAL FUNCTIONS
  */
@@ -144,6 +144,9 @@ void GenericApp_HandleKeys( byte shift, byte keys );
 void GenericApp_MessageMSGCB( afIncomingMSGPacket_t *pckt );
 void GenericApp_SendTheMessage( void );
 
+void GenericApp_ProcessUartData( OSALSerialData_t *inMsg );
+void GenericApp_LeaveNetwork( void );
+void GenericApp_HandleNetworkStatus( devStates_t GenericApp_NwkStateTemp);
 /*********************************************************************
  * NETWORK LAYER CALLBACKS
  */
@@ -199,6 +202,7 @@ void GenericApp_Init( byte task_id )
   // Register for serial events - This app will handle all serial events
   Serial_UartRegisterTaskID( GenericApp_TaskID );
   
+  SpO2SystemStatus = SpO2_OFFLINE;
   // Update the display
 #if defined ( LCD_SUPPORTED )
     HalLcdWriteString( "GenericApp", HAL_LCD_LINE_1 );
@@ -273,12 +277,8 @@ UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
 
         case ZDO_STATE_CHANGE:
           GenericApp_NwkState = (devStates_t)(MSGpkt->hdr.status);
-          if ( (GenericApp_NwkState == DEV_ZB_COORD)
-              || (GenericApp_NwkState == DEV_ROUTER)
-              || (GenericApp_NwkState == DEV_END_DEVICE) )
-          {
-            // Start sending "the" message in a regular interval.
-          }
+          
+          GenericApp_HandleNetworkStatus(GenericApp_NwkState);
           break;
 
         case CMD_SERIAL_UART_MSG:
@@ -409,6 +409,32 @@ void GenericApp_ProcessZDOMsgs( zdoIncomingMsg_t *inMsg )
  */
 void GenericApp_HandleKeys( byte shift, byte keys )
 {
+  if(keys & HAL_KEY_SW_6)   //Link button be pressed
+  {
+    if( SpO2SystemStatus == SpO2_OFFLINE ) // 离线-->寻找网络
+    {
+      if( ZDApp_StartJoiningCycle() == FALSE )
+        if( ZDOInitDevice(0) == ZDO_INITDEV_LEAVE_NOT_STARTED) //Start Network
+          ZDOInitDevice(0);
+       SpO2SystemStatus = SpO2_FIND_NETWORK;
+       // 发送正在寻找网络消息给MSP430
+    }
+    else if( SpO2SystemStatus == SpO2_ONLINE) // 在线-->离线
+    {
+      // Leave Network
+      GenericApp_LeaveNetwork(); 
+     // 发送断网消息给MSP430 
+    }
+    else if ( SpO2SystemStatus == SpO2_FIND_NETWORK ) // 寻找网络-->离线
+    {
+      // Stop search network
+      ZDApp_StopJoiningCycle();
+      SpO2SystemStatus = SpO2_OFFLINE;
+      // 发送断网消息给MSP430
+    }
+    else
+    {}//do nothing
+  }
 }
 
 /*********************************************************************
@@ -501,8 +527,60 @@ void GenericApp_ProcessUartData( OSALSerialData_t *inMsg )
   pMsg = inMsg->msg;
   dataLen = inMsg->hdr.status;
   
-  
+  uint8 buffer[3] = {DATA_START,START_MEASURE,DATA_END};
+  if(pMsg[0] == DATA_START && pMsg[dataLen - 1] == DATA_END)
+  {
+    Serial_UartSendMsg(buffer,3);
+  }  
+}
+
+
+/*********************************************************************
+ * @fn      GenericApp_LeaveNetwork
+ *
+ * @brief   Let device leave network.
+ *
+ * @param   none
+ *
+ * @return  none
+ */
+void GenericApp_LeaveNetwork( void )
+{
+  NLME_LeaveReq_t leaveReq;
+
+  osal_memset((uint8 *)&leaveReq,0,sizeof(NLME_LeaveReq_t));
+  osal_memcpy(leaveReq.extAddr,NLME_GetExtAddr(),Z_EXTADDR_LEN);
+
+  leaveReq.removeChildren = FALSE; // Only false shoule be use.
+  leaveReq.rejoin = FALSE;  
+  leaveReq.silent = FALSE;
+
+  NLME_LeaveReq( &leaveReq );
+}
+
+/*********************************************************************
+ * @fn      GenericApp_HandleNetworkStatus
+ *
+ * @brief  According to EcgSystemStatus to do different thing
+ *
+ * @param   none
+ *
+ * @return  none
+ */
+void GenericApp_HandleNetworkStatus( devStates_t GenericApp_NwkStateTemp)
+{
+  if( GenericApp_NwkStateTemp == DEV_END_DEVICE) //connect to GW
+  {
+      SpO2SystemStatus = SpO2_ONLINE;
+      // 发送找到网络消息给MSP430
+      
+  }
+  else if( SpO2SystemStatus != SpO2_OFFLINE) // Find network -- 1.coordinate lose 2.first connect to coordinate 
+  { // 关闭搜索后，可能由于OSAL的timer事件设置，再进入一次ZDO_STATE_CHANGE，上面的判断就是为了排除这种情况
+    SpO2SystemStatus = SpO2_FIND_NETWORK;
+    // 发送寻找网络消息给MSP430
     
+  }
 }
 /*********************************************************************
 *********************************************************************/

@@ -2391,6 +2391,7 @@
         <option>
           <name>CCDefines</name>
           <state>NWK_AUTO_POLL</state>
+          <state>HOLD_AUTO_START</state>
           <state>ZTOOL_P1</state>
           <state>xMT_TASK</state>
           <state>xMT_SYS_FUNC</state>
@@ -2479,7 +2480,7 @@
         <option>
           <name>CCAllowList</name>
           <version>1</version>
-          <state>11101</state>
+          <state>00000</state>
         </option>
         <option>
           <name>CCObjUseModuleName</name>
@@ -2609,7 +2610,7 @@
         </option>
         <option>
           <name>CCOptLevel</name>
-          <state>3</state>
+          <state>0</state>
         </option>
         <option>
           <name>CCOptStrategy</name>
@@ -2618,7 +2619,7 @@
         </option>
         <option>
           <name>CCOptLevelSlave</name>
-          <state>3</state>
+          <state>0</state>
         </option>
         <option>
           <name>CompilerMisraRules04</name>
