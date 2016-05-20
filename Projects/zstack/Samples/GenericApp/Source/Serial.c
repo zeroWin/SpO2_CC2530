@@ -52,7 +52,7 @@
 #endif
 
 #if !defined( SERIAL_BAUD )
-#define SERIAL_BAUD  HAL_UART_BR_38400
+#define SERIAL_BAUD   HAL_UART_BR_115200
 #endif
 
 // When the Rx buf space is less than this threshold, invoke the Rx callback.
@@ -120,7 +120,7 @@ void Serial_Init( void )
   
   /* UART Configuration */  
   uartConfig.configured           = TRUE;              // 2x30 don't care - see uart driver.
-  uartConfig.baudRate             = SERIAL_BAUD;       // 38400
+  uartConfig.baudRate             = SERIAL_BAUD;       // 115200
   uartConfig.flowControl          = FALSE;             //关闭硬件流控制
   uartConfig.flowControlThreshold = SERIAL_THRESH;     // 2x30 don't care - see uart driver.
   uartConfig.rx.maxBufSize        = SERIAL_RX_SZ;      // 2x30 don't care - see uart driver.

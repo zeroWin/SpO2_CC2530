@@ -1,9 +1,9 @@
 /**************************************************************************************************
-  Filename:       Serial.h
-  Revised:        $Date: 2016-03-24 16:45:16 +0800 (Thu, 24 Mar 2016) $
+  Filename:       pingPongBuf.h
+  Revised:        $Date: 2016-04-06 15:41:16 +0800 (Wen, 6 Apr 2016) $
   Revision:       $Revision: 1 $
 
-  Description:    This file contains the interface of UART for BLE
+  Description:    This file contains the interface to the pingPong buff.
 
 
   Copyright 2016 Bupt. All rights reserved.
@@ -34,11 +34,14 @@
   (INCLUDING BUT NOT LIMITED TO ANY DEFENSE THEREOF), OR OTHER SIMILAR COSTS.
 
   Should you have any questions regarding your right to use this Software,
-  contact kylinnevercry@gmail.com. 
+  contact kylinnevercry@gami.com. 
+
+  该文件提供Ping Pong Buf 功能的接口API函数
+  供SD卡驱动和ECG采集驱动使用
 **************************************************************************************************/
 
-#ifndef SERIAL_H
-#define SERIAL_H
+#ifndef PING_PONG_BUFF_H
+#define PING_PONG_BUFF_H
 
 #ifdef __cplusplus
 extern "C"
@@ -48,54 +51,71 @@ extern "C"
 /**************************************************************************************************
  *                                             INCLUDES
  **************************************************************************************************/
-#include "Onboard.h"
-#include "OSAL.h"
-
+#include "hal_board.h"
 
 /**************************************************************************************************
- *                                              MACROS
+ * MACROS
  **************************************************************************************************/
 
+  
 /**************************************************************************************************
  *                                            CONSTANTS
  **************************************************************************************************/
-/* Message Command IDs */
-#define CMD_SERIAL_UART_MSG             0x01    
 
   
+/***************************************************************************************************
+ *                                             TYPEDEFS
+ ***************************************************************************************************/
+typedef enum
+{
+  PingPongBuf_WRITE_SUCCESS,
+  PingPongBuf_WRITE_SWITCH, // write successfully and switch ping pong buff
+  PingPongBuf_WRITE_FAIL,
+  PingPongBuf_READ_SUCCESS,
+  PingPongBuf_READ_FAIL
+} BufOpStatus_t;
+
 typedef struct
 {
-  osal_event_hdr_t  hdr;
-  uint8             *msg;
-} OSALSerialData_t;
+  uint8  active_buf_flag; // only last bit is valid
+  uint16 write_count;     // 已经写入到buff的数据量
+  uint16 buf_size;        // buff的大小，用户定义
+  uint8 *pBuf_ping;
+  uint8 *pBuf_pong;
+} PingPongBuf_t;
 
-#define START_MEASURE   0x01
-#define STOP_MEASURE    0x02
-#define SYNC_MEASURE    0x03
-#define FIND_NWK        0x04
-#define END_DEVICE      0x05
-#define CLOSEING        0x06
-#define CLOSE_NWK       0x07
-#define DATA_START      0x33    // 数据开始校验位
-#define DATA_END        0x55    // 数据结束校验位
-
+// (4B RED + 4B IR)*8 + HR(2B)+SpO2(2B) = 68B
+#define SEND_BUFFER_SIZE 68
 /**************************************************************************************************
  *                                             FUNCTIONS - API
  **************************************************************************************************/
-/*
- * Task Initialization for the UART1-alt1
- */
-extern void Serial_Init( void );
 
 /*
- * Register TaskID for the application
+ * Initialize PingPong buff.
  */
-extern void Serial_UartRegisterTaskID( uint8 taskID );
+extern PingPongBuf_t *PingPongBufInit(uint16 pingPongBufSize);
 
 /*
- * Send Msg
+ * Reset PingPong buff.Just reset active_buf_flag and write_count
+ * not free the mem
  */
-extern uint16 Serial_UartSendMsg( uint8 *msg , uint8 dataLen );
+extern void PingPongBufReset(PingPongBuf_t *pingPongBuf);
+
+/*
+ * Write one data into the active buffer.
+ */
+extern BufOpStatus_t PingPongBufWrite(PingPongBuf_t *pingPongBuf,uint16 writeData);
+
+/*
+ * Read all data from inactive buffer.
+ */
+extern BufOpStatus_t PingPongBufRead(PingPongBuf_t *pingPongBuf,
+                                     uint8 **dataBuf);
+
+/*
+ * Free PingPong buff memory.
+ */
+extern void PingPongBufFree(PingPongBuf_t *pingPongBuf);
 
 #ifdef __cplusplus
 }

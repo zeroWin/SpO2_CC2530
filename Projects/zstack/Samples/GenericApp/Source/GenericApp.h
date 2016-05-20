@@ -83,9 +83,11 @@ extern "C"
 #define GENERICAPP_SEND_MSG_TIMEOUT   5000     // Every 5 seconds
 
 // Application Events (OSAL) - These are bit weighted definitions.
-#define GENERICAPP_SEND_MSG_EVT       0x0001
-#define GENERICAPP_START_MEASURE      0x0002
-#define GENERICAPP_STOP_MEASURE       0x0004
+#define GENERICAPP_SEND_MSG_EVT        0x0001
+#define GENERICAPP_START_MEASURE       0x0002
+#define GENERICAPP_STOP_MEASURE        0x0004
+#define GENERICAPP_SPO2_MEAS_BUFF_FULL 0x0008
+  
   
 /*********************************************************************
  * MACROS

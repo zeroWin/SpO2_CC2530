@@ -64,6 +64,7 @@
 #include "hal_uart.h"
 
 #include "Serial.h"
+#include "PingPongBuf.h"
 /*********************************************************************
  * MACROS
  */
@@ -114,7 +115,7 @@ const SimpleDescriptionFormat_t GenericApp_SimpleDesc =
 // in the structure here and make it a "const" (in code space).  The
 // way it's defined in this sample app it is define in RAM.
 endPointDesc_t GenericApp_epDesc;
-
+uint8 temp = 0;
 /*********************************************************************
  * EXTERNAL VARIABLES
  */
@@ -136,6 +137,8 @@ byte GenericApp_TransID;  // This is the unique message ID (counter)
 
 afAddrType_t GenericApp_DstAddr;
 SpO2SystemStatus_t SpO2SystemStatus;
+
+PingPongBuf_t *PingPongBuf;
 /*********************************************************************
  * LOCAL FUNCTIONS
  */
@@ -203,6 +206,10 @@ void GenericApp_Init( byte task_id )
   Serial_UartRegisterTaskID( GenericApp_TaskID );
   
   SpO2SystemStatus = SpO2_OFFLINE;
+  uint8 bufferSend[3] = {DATA_START,DATA_START,DATA_END};     
+  bufferSend[1] = CLOSE_NWK;
+  Serial_UartSendMsg(bufferSend,3);
+  
   // Update the display
 #if defined ( LCD_SUPPORTED )
     HalLcdWriteString( "GenericApp", HAL_LCD_LINE_1 );
@@ -225,8 +232,6 @@ void GenericApp_Init( byte task_id )
  *
  * @return  none
  */
-uint8 flag = 0;
-uint8 temp = 0;
 UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
 {
   afIncomingMSGPacket_t *MSGpkt;
@@ -315,26 +320,24 @@ UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
     return (events ^ GENERICAPP_SEND_MSG_EVT);
   }
   
-  
-  if ( events & GENERICAPP_START_MEASURE )
+    // Handle Measure result
+  // send to GW or store to SD card
+  if ( events & GENERICAPP_SPO2_MEAS_BUFF_FULL )
   {
-    if(flag == 1)
-    {
-      uint16 dataTemp[30] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30};
-      AF_DataRequest( &GenericApp_DstAddr, &GenericApp_epDesc,
-                      GENERICAPP_CLUSTERID_SPO2_RESULT,
-                      60,
-                      (uint8 *)dataTemp,
-                      &GenericApp_TransID,
-                      AF_DISCV_ROUTE, AF_DEFAULT_RADIUS ); 
-      // Setup to send message again
-      osal_start_timerEx( GenericApp_TaskID,
-                          GENERICAPP_START_MEASURE,
-                          240 );
-    }
+     // Send to GW or store in SD
+    uint8 *dataTemp;
+    PingPongBufRead(PingPongBuf,&dataTemp); // 读取数据并发送
+    AF_DataRequest( &GenericApp_DstAddr, &GenericApp_epDesc,
+                   GENERICAPP_CLUSTERID_SPO2_RESULT,
+                   SEND_BUFFER_SIZE,
+                   dataTemp,
+                   &GenericApp_TransID,
+                   AF_DISCV_ROUTE, AF_DEFAULT_RADIUS );
+    
     // return unprocessed events
-    return (events ^ GENERICAPP_START_MEASURE);
+    return (events ^ GENERICAPP_SPO2_MEAS_BUFF_FULL);
   }
+  
   // Discard unknown events
   return 0;
 }
@@ -409,6 +412,7 @@ void GenericApp_ProcessZDOMsgs( zdoIncomingMsg_t *inMsg )
  */
 void GenericApp_HandleKeys( byte shift, byte keys )
 {
+  uint8 bufferSend[3] = {DATA_START,DATA_START,DATA_END};
   if(keys & HAL_KEY_SW_6)   //Link button be pressed
   {
     if( SpO2SystemStatus == SpO2_OFFLINE ) // 离线-->寻找网络
@@ -418,12 +422,20 @@ void GenericApp_HandleKeys( byte shift, byte keys )
           ZDOInitDevice(0);
        SpO2SystemStatus = SpO2_FIND_NETWORK;
        // 发送正在寻找网络消息给MSP430
+       bufferSend[1] = FIND_NWK;
+       Serial_UartSendMsg(bufferSend,3);
     }
     else if( SpO2SystemStatus == SpO2_ONLINE) // 在线-->离线
     {
+      // 发送断网消息给MSP430 
+      bufferSend[1] = CLOSEING;
+      Serial_UartSendMsg(bufferSend,3);
+      
+      // 释放内存 防止是测量时用户断网
+      PingPongBufFree(PingPongBuf);
+      PingPongBuf = NULL;
       // Leave Network
       GenericApp_LeaveNetwork(); 
-     // 发送断网消息给MSP430 
     }
     else if ( SpO2SystemStatus == SpO2_FIND_NETWORK ) // 寻找网络-->离线
     {
@@ -431,6 +443,8 @@ void GenericApp_HandleKeys( byte shift, byte keys )
       ZDApp_StopJoiningCycle();
       SpO2SystemStatus = SpO2_OFFLINE;
       // 发送断网消息给MSP430
+      bufferSend[1] = CLOSE_NWK;
+      Serial_UartSendMsg(bufferSend,3);
     }
     else
     {}//do nothing
@@ -454,6 +468,7 @@ void GenericApp_HandleKeys( byte shift, byte keys )
  */
 void GenericApp_MessageMSGCB( afIncomingMSGPacket_t *pkt )
 {
+  uint8 bufferSend[3] = {DATA_START,DATA_START,DATA_END};
   switch ( pkt->clusterId )
   {
     case GENERICAPP_CLUSTERID:
@@ -466,17 +481,30 @@ void GenericApp_MessageMSGCB( afIncomingMSGPacket_t *pkt )
       break;
       
     case GENERICAPP_CLUSTERID_START:
-      flag = 1;
-      osal_set_event( GenericApp_TaskID , GENERICAPP_START_MEASURE );      
+      // 申请内存
+      temp = 0;
+      PingPongBuf = PingPongBufInit(SEND_BUFFER_SIZE);
+      bufferSend[1] = START_MEASURE;
+      Serial_UartSendMsg(bufferSend,3);
+
       break;
     
     case GENERICAPP_CLUSTERID_STOP:  
-      flag = 0;
+      bufferSend[1] = STOP_MEASURE;
+      Serial_UartSendMsg(bufferSend,3);
+      // 释放内存
+      PingPongBufFree(PingPongBuf);
+      PingPongBuf = NULL;
       break;
       
     case GENERICAPP_CLUSTERID_SYNC:
-      flag = 1;
-      osal_set_event( GenericApp_TaskID , GENERICAPP_START_MEASURE );        
+      // 申请内存
+      temp = 0;
+      PingPongBuf = PingPongBufInit(SEND_BUFFER_SIZE); 
+      bufferSend[1] = SYNC_MEASURE;
+      Serial_UartSendMsg(bufferSend,3);
+
+     
       break;
   }
 }
@@ -523,14 +551,56 @@ void GenericApp_ProcessUartData( OSALSerialData_t *inMsg )
 {
   uint8 *pMsg;
   uint8 dataLen;
+  uint8 i;
+  BufOpStatus_t OpStatus;
   
   pMsg = inMsg->msg;
   dataLen = inMsg->hdr.status;
   
-  uint8 buffer[3] = {DATA_START,START_MEASURE,DATA_END};
-  if(pMsg[0] == DATA_START && pMsg[dataLen - 1] == DATA_END)
+  if(dataLen == 3 && pMsg[1] == START_MEASURE) // 申请空间
   {
-    Serial_UartSendMsg(buffer,3);
+    temp = 0;
+    PingPongBuf = PingPongBufInit(SEND_BUFFER_SIZE);
+    return;
+  }
+  
+  if(dataLen == 3 && pMsg[1] == STOP_MEASURE) // 释放空间
+  {
+    PingPongBufFree(PingPongBuf);
+    PingPongBuf = NULL;    
+    return;
+  }
+  //如何已经释放内存，直接返回
+  if(PingPongBuf == NULL || dataLen != 12)
+    return;
+  
+  //Write to buffer
+  if(temp != 7)
+  {
+    for(i = 0; i < dataLen-4; ++i)
+      OpStatus = PingPongBufWrite(PingPongBuf,pMsg[i]);
+    ++temp;
+  }
+  else
+  {
+    for(i = 0; i < dataLen; ++i)
+      OpStatus = PingPongBufWr
+        
+    PingPongBufWrite(PingPongBuf,pMsg[i]);
+    temp = 0;    
+  }
+  //根据情况执行不同的事件
+  if (OpStatus == PingPongBuf_WRITE_SWITCH) // Success and switch buff
+  {
+    osal_set_event(GenericApp_TaskID,GENERICAPP_SPO2_MEAS_BUFF_FULL);
+  }
+  else if(OpStatus == PingPongBuf_WRITE_FAIL )// fail
+  {
+    PingPongBufReset(PingPongBuf);
+  }
+  else  //Success
+  { 
+    //do nothing
   }  
 }
 
@@ -569,17 +639,24 @@ void GenericApp_LeaveNetwork( void )
  */
 void GenericApp_HandleNetworkStatus( devStates_t GenericApp_NwkStateTemp)
 {
+  uint8 bufferSend[3] = {DATA_START,DATA_START,DATA_END};
   if( GenericApp_NwkStateTemp == DEV_END_DEVICE) //connect to GW
   {
       SpO2SystemStatus = SpO2_ONLINE;
       // 发送找到网络消息给MSP430
-      
+      bufferSend[1] = END_DEVICE;
+      Serial_UartSendMsg(bufferSend,3);      
   }
   else if( SpO2SystemStatus != SpO2_OFFLINE) // Find network -- 1.coordinate lose 2.first connect to coordinate 
   { // 关闭搜索后，可能由于OSAL的timer事件设置，再进入一次ZDO_STATE_CHANGE，上面的判断就是为了排除这种情况
     SpO2SystemStatus = SpO2_FIND_NETWORK;
     // 发送寻找网络消息给MSP430
+    bufferSend[1] = FIND_NWK;
+    Serial_UartSendMsg(bufferSend,3);
     
+    // 释放内存 防止是测量时断网
+    PingPongBufFree(PingPongBuf);
+    PingPongBuf = NULL;
   }
 }
 /*********************************************************************
