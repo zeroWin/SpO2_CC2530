@@ -283,6 +283,7 @@ UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
 
         case CMD_SERIAL_UART_MSG:
            GenericApp_ProcessUartData((OSALSerialData_t *)MSGpkt);
+           break;
            
         default:
           break;
@@ -456,8 +457,6 @@ void GenericApp_MessageMSGCB( afIncomingMSGPacket_t *pkt )
       // 发送同步消息
       bufferSend[1] = SYNC_MEASURE;
       Serial_UartSendMsg(bufferSend,3);
-
-     
       break;
   }
 }
