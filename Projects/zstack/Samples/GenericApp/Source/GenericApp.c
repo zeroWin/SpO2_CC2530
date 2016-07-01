@@ -488,6 +488,15 @@ void GenericApp_ProcessUartData( OSALSerialData_t *inMsg )
                    &GenericApp_TransID,
                    AF_DISCV_ROUTE, AF_DEFAULT_RADIUS ); 
   }
+  else if(dataLen == 10) // 长度为10表示同步结束消息
+  {
+      AF_DataRequest( &GenericApp_DstAddr, &GenericApp_epDesc,
+                       GENERICAPP_CLUSTERID_SPO2_SYNC_OVER,
+                       0,
+                       NULL,
+                       &GenericApp_TransID,
+                       AF_DISCV_ROUTE, AF_DEFAULT_RADIUS );    
+  }
 }
 
 
